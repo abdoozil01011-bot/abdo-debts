@@ -199,6 +199,16 @@
                 </div>
             </section>
 
+            <!-- Reports and backup actions -->
+            <section class="flex flex-wrap gap-2">
+                <button onclick="openReportsModal()" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-xs font-bold border border-blue-100 dark:border-blue-900">
+                    <i class="fa-solid fa-chart-column"></i> التقارير المالية
+                </button>
+                <button onclick="exportBackupCSV()" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 text-xs font-bold border border-emerald-100 dark:border-emerald-900">
+                    <i class="fa-solid fa-file-csv"></i> نسخة احتياطية Excel / CSV
+                </button>
+            </section>
+
             <!-- Search and Filter Tabs -->
             <section class="bg-white dark:bg-slate-800 p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-sm flex flex-col md:flex-row gap-3 items-center justify-between">
                 <div class="relative w-full md:w-80">
@@ -278,6 +288,70 @@
                     <button type="submit" id="addPersonSubmitBtn" class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md">حفظ البيانات</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Edit Person Modal -->
+    <div id="editPersonModal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
+                <h3 class="text-base font-bold text-slate-900 dark:text-white"><i class="fa-solid fa-pen-to-square text-blue-600 ml-1"></i> تعديل بيانات الشخص</h3>
+                <button onclick="closeModal('editPersonModal')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form id="editPersonForm" onsubmit="savePersonEdits(event)" class="mt-4 space-y-3.5">
+                <input type="hidden" id="editPersonDocId">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">الاسم</label>
+                    <input id="editPersonName" required maxlength="100" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm dark:text-white">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">رقم الموبايل</label>
+                    <input id="editPersonPhone" type="tel" maxlength="30" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm dark:text-white">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">ملاحظات</label>
+                    <textarea id="editPersonNotes" rows="3" maxlength="1000" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm dark:text-white"></textarea>
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="closeModal('editPersonModal')" class="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold">إلغاء</button>
+                    <button id="editPersonSubmitBtn" type="submit" class="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold">حفظ التعديلات</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Financial Reports Modal -->
+    <div id="reportsModal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
+                <h3 class="text-base font-bold text-slate-900 dark:text-white"><i class="fa-solid fa-chart-pie text-blue-600 ml-1"></i> التقارير المالية</h3>
+                <button onclick="closeModal('reportsModal')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="mt-4 space-y-3">
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30">
+                        <p class="text-xs text-emerald-700 dark:text-emerald-300 font-bold">تحصيل اليوم</p>
+                        <p id="reportTodayPayments" class="text-xl font-black mt-1 text-emerald-700 dark:text-emerald-300">0 ج.م</p>
+                    </div>
+                    <div class="p-4 rounded-2xl bg-blue-50 dark:bg-blue-950/30">
+                        <p class="text-xs text-blue-700 dark:text-blue-300 font-bold">ديون أضيفت اليوم</p>
+                        <p id="reportTodayDebts" class="text-xl font-black mt-1 text-blue-700 dark:text-blue-300">0 ج.م</p>
+                    </div>
+                    <div class="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30">
+                        <p class="text-xs text-emerald-700 dark:text-emerald-300 font-bold">تحصيل الشهر</p>
+                        <p id="reportMonthPayments" class="text-xl font-black mt-1 text-emerald-700 dark:text-emerald-300">0 ج.م</p>
+                    </div>
+                    <div class="p-4 rounded-2xl bg-blue-50 dark:bg-blue-950/30">
+                        <p class="text-xs text-blue-700 dark:text-blue-300 font-bold">ديون أضيفت الشهر</p>
+                        <p id="reportMonthDebts" class="text-xl font-black mt-1 text-blue-700 dark:text-blue-300">0 ج.م</p>
+                    </div>
+                </div>
+                <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700">
+                    <p class="text-xs text-slate-500 dark:text-slate-400 font-bold">إجمالي المتبقي على كل الأشخاص</p>
+                    <p id="reportOutstanding" class="text-2xl font-black mt-1 text-slate-900 dark:text-white">0 ج.م</p>
+                </div>
+                <p class="text-[11px] text-slate-400">التقارير محسوبة من الحركات المسجلة وتواريخها، ولا تشمل أي حركة بدون تاريخ صحيح.</p>
+            </div>
         </div>
     </div>
 
@@ -379,8 +453,9 @@
         import { 
             getAuth, 
             signInWithEmailAndPassword, 
-            createUserWithEmailAndPassword, 
+            createUserWithEmailAndPassword,
             sendEmailVerification,
+            sendPasswordResetEmail,
             reload,
             signOut, 
             onAuthStateChanged 
@@ -391,9 +466,10 @@
             doc, 
             setDoc, 
             addDoc, 
-            updateDoc, 
-            deleteDoc, 
-            onSnapshot 
+            updateDoc,
+            deleteDoc,
+            onSnapshot,
+            runTransaction
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Firebase configuration for the Abdo Debts web app
@@ -433,6 +509,10 @@
         window.handleForgotPassword = handleForgotPassword;
         window.handleLogout = handleLogout;
         window.openAddPersonModal = openAddPersonModal;
+        window.openEditPersonModal = openEditPersonModal;
+        window.savePersonEdits = savePersonEdits;
+        window.exportBackupCSV = exportBackupCSV;
+        window.openReportsModal = openReportsModal;
         window.closeModal = closeModal;
         window.saveNewPerson = saveNewPerson;
         window.openTransactionModal = openTransactionModal;
@@ -449,6 +529,14 @@
             initTheme();
             document.getElementById('newPersonDate').valueAsDate = new Date();
             document.getElementById('txnDate').valueAsDate = new Date();
+
+            // Stop cleanly if Firebase could not initialize.
+            if (!auth || !db) {
+                hideAppLoader();
+                showAuthView();
+                showAuthNotice('تعذر الاتصال بخدمة الحسابات. تأكد من إعدادات Firebase واتصال الإنترنت.');
+                return;
+            }
 
             // Listen to Auth State. Unverified accounts never reach the dashboard.
             onAuthStateChanged(auth, (user) => {
@@ -659,12 +747,20 @@
                     return 'كلمة المرور ضعيفة، يجب أن تكون 6 خانات على الأقل.';
                 case 'auth/too-many-requests':
                     return 'تم إرسال طلبات كثيرة. انتظر قليلًا ثم حاول مرة أخرى.';
+                case 'auth/missing-email':
+                    return 'اكتب البريد الإلكتروني أولاً.';
+                case 'auth/user-disabled':
+                    return 'هذا الحساب متوقف. تواصل مع الدعم.';
+                case 'auth/operation-not-allowed':
+                    return 'إعادة تعيين كلمة المرور غير مفعّلة في إعدادات Firebase.';
                 case 'auth/network-request-failed':
                     return 'تعذر الاتصال، يرجى فحص شبكة الإنترنت.';
                 case 'auth/unauthorized-domain':
                     return 'نطاق الموقع غير مضاف في Firebase. أضف abdooz1011-bot.github.io إلى Authorized domains.';
-                case 'auth/too-many-requests':
-                    return 'تم طلب رسائل كثيرة خلال وقت قصير. انتظر قليلًا ثم حاول مرة أخرى.';
+                case 'auth/expired-action-code':
+                    return 'رابط إعادة التعيين انتهت صلاحيته. اطلب رابطاً جديداً.';
+                case 'auth/invalid-action-code':
+                    return 'رابط إعادة التعيين غير صالح أو تم استخدامه بالفعل. اطلب رابطاً جديداً.';
                 case 'firebase-not-initialized':
                     return 'تعذر تشغيل Firebase. راجع إعدادات الاتصال في ملف الموقع.';
                 default:
@@ -674,7 +770,11 @@
 
         // Firestore Subscription (Private User Data)
         function subscribeToUserData(userId) {
-            if (!userId) return;
+            if (!userId || !db) return;
+            if (unsubscribeFirestore) {
+                unsubscribeFirestore();
+                unsubscribeFirestore = null;
+            }
             // Strict path rule: /artifacts/{appId}/users/{userId}/{collectionName}
             const colRef = collection(db, 'artifacts', appId, 'users', userId, 'debtors');
             
@@ -697,19 +797,23 @@
             });
         }
 
-        // Helpers
-        function getRemainingBalance(person) {
+        // Calculate a balance directly from a history array (also used inside Firestore transactions).
+        function calculateHistoryBalance(history) {
             let balance = 0;
-            if (person.history && Array.isArray(person.history)) {
-                person.history.forEach(item => {
-                    if (item.type === 'initial' || item.type === 'add_debt') {
-                        balance += parseFloat(item.amount || 0);
-                    } else if (item.type === 'payment') {
-                        balance -= parseFloat(item.amount || 0);
-                    }
+            if (Array.isArray(history)) {
+                history.forEach(item => {
+                    const amount = Number(item.amount);
+                    if (!Number.isFinite(amount)) return;
+                    if (item.type === 'initial' || item.type === 'add_debt') balance += amount;
+                    else if (item.type === 'payment') balance -= amount;
                 });
             }
-            return Math.max(0, balance);
+            return balance;
+        }
+
+        // Helpers
+        function getRemainingBalance(person) {
+            return Math.max(0, calculateHistoryBalance(person.history));
         }
 
         function getTotalDebt(person) {
@@ -766,8 +870,10 @@
 
             let filtered = records.filter(person => {
                 const remaining = getRemainingBalance(person);
-                const matchesSearch = person.name.toLowerCase().includes(search) || 
-                    (person.phone && person.phone.toLowerCase().includes(search));
+                const personName = String(person.name || '');
+                const personPhone = String(person.phone || '');
+                const matchesSearch = personName.toLowerCase().includes(search) ||
+                    personPhone.toLowerCase().includes(search);
                 
                 if (!matchesSearch) return false;
 
@@ -800,7 +906,7 @@
                                 <div class="truncate">
                                     <h4 class="font-bold text-base text-slate-900 dark:text-white truncate">${escapeHtml(person.name)}</h4>
                                     ${person.phone ? `
-                                        <a href="tel:${person.phone}" class="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-emerald-600 dark:text-slate-400 mt-1">
+                                        <a href="tel:${escapeHtml(person.phone)}" class="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-emerald-600 dark:text-slate-400 mt-1">
                                             <i class="fa-solid fa-phone text-[10px]"></i>
                                             <span dir="ltr">${escapeHtml(person.phone)}</span>
                                         </a>
@@ -859,6 +965,9 @@
                                     <i class="fa-solid fa-receipt text-[11px]"></i> كشف الحساب (${person.history ? person.history.length : 0})
                                 </button>
                                 <div class="flex items-center gap-1.5">
+                                    <button onclick="openEditPersonModal('${person.docId}')" title="تعديل بيانات الشخص" class="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded-lg">
+                                        <i class="fa-solid fa-pen-to-square"></i>
+                                    </button>
                                     ${!isSettled ? `
                                         <button onclick="confirmSettleAll('${person.docId}')" title="تسوية وتصفير الحساب بالكامل" class="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded-lg">
                                             <i class="fa-solid fa-check-double"></i>
@@ -873,6 +982,118 @@
                     </div>
                 `;
             }).join('');
+        }
+
+        // Edit only the contact/profile fields; financial history remains untouched.
+        function openEditPersonModal(docId) {
+            const person = records.find(p => p.docId === docId);
+            if (!person) return;
+            document.getElementById('editPersonDocId').value = docId;
+            document.getElementById('editPersonName').value = person.name || '';
+            document.getElementById('editPersonPhone').value = person.phone || '';
+            document.getElementById('editPersonNotes').value = person.notes || '';
+            openModal('editPersonModal');
+        }
+
+        async function savePersonEdits(e) {
+            e.preventDefault();
+            if (!currentUser || !db) return;
+            const docId = document.getElementById('editPersonDocId').value;
+            const name = document.getElementById('editPersonName').value.trim();
+            const phone = document.getElementById('editPersonPhone').value.trim();
+            const notes = document.getElementById('editPersonNotes').value.trim();
+            const btn = document.getElementById('editPersonSubmitBtn');
+            if (!name) {
+                showToast('اكتب اسم الشخص أولاً', true);
+                return;
+            }
+            btn.disabled = true;
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'debtors', docId);
+                await updateDoc(docRef, { name, phone, notes });
+                closeModal('editPersonModal');
+                showToast('تم تعديل بيانات الشخص بنجاح');
+            } catch (err) {
+                console.error('Edit person error:', err);
+                showToast('تعذر حفظ التعديلات. حاول مرة أخرى.', true);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function csvCell(value) {
+            let text = String(value ?? '');
+            if (/^[=+@\\-\\t\\r]/.test(text)) text = "'" + text;
+            const safe = text.replace(/"/g, '""');
+            return '"' + safe + '"';
+        }
+
+        function exportBackupCSV() {
+            if (!currentUser) {
+                showToast('سجل الدخول أولاً لتصدير النسخة الاحتياطية', true);
+                return;
+            }
+            if (!records.length) {
+                showToast('لا توجد بيانات لتصديرها', true);
+                return;
+            }
+            const rows = [[
+                'اسم الشخص', 'رقم الهاتف', 'ملاحظات الشخص', 'تاريخ إنشاء الحساب',
+                'نوع الحركة', 'المبلغ بالجنيه', 'تاريخ الحركة', 'ملاحظات الحركة',
+                'الرصيد المتبقي بالجنيه'
+            ]];
+            records.forEach(person => {
+                const history = Array.isArray(person.history) ? person.history : [];
+                if (!history.length) {
+                    rows.push([person.name, person.phone, person.notes, person.createdAt, '', '', '', '', getRemainingBalance(person)]);
+                } else {
+                    history.forEach(item => rows.push([
+                        person.name, person.phone, person.notes, person.createdAt,
+                        item.type === 'payment' ? 'سداد' : (item.type === 'initial' ? 'رصيد افتتاحي' : 'دين إضافي'),
+                        item.amount, item.date, item.note, getRemainingBalance(person)
+                    ]));
+                }
+            });
+            const csv = '\\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\\r\\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            const now = new Date();\n            const localDate = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');\n            link.download = 'دفتر-المستحقات-نسخة-احتياطية-' + localDate + '.csv';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1500);
+            showToast('تم تجهيز النسخة الاحتياطية. احتفظ بها في مكان آمن.');
+        }
+
+        function openReportsModal() {
+            const today = new Date();
+            const dateKey = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
+            const monthKey = dateKey.slice(0, 7);
+            let todayPayments = 0, todayDebts = 0, monthPayments = 0, monthDebts = 0, outstanding = 0;
+            records.forEach(person => {
+                outstanding += getRemainingBalance(person);
+                (Array.isArray(person.history) ? person.history : []).forEach(item => {
+                    const amount = Number(item.amount) || 0;
+                    const date = String(item.date || '');
+                    const isPayment = item.type === 'payment';
+                    if (date === dateKey) {
+                        if (isPayment) todayPayments += amount;
+                        else todayDebts += amount;
+                    }
+                    if (date.startsWith(monthKey)) {
+                        if (isPayment) monthPayments += amount;
+                        else monthDebts += amount;
+                    }
+                });
+            });
+            document.getElementById('reportTodayPayments').textContent = formatMoney(todayPayments) + ' ج.م';
+            document.getElementById('reportTodayDebts').textContent = formatMoney(todayDebts) + ' ج.م';
+            document.getElementById('reportMonthPayments').textContent = formatMoney(monthPayments) + ' ج.م';
+            document.getElementById('reportMonthDebts').textContent = formatMoney(monthDebts) + ' ج.م';
+            document.getElementById('reportOutstanding').textContent = formatMoney(outstanding) + ' ج.م';
+            openModal('reportsModal');
         }
 
         // Add Person
@@ -967,68 +1188,117 @@
 
         async function handleTransactionSubmit(e) {
             e.preventDefault();
-            if (!currentUser) return;
+            if (!currentUser || !db) return;
 
             const docId = document.getElementById('txnPersonDocId').value;
-            const amount = parseFloat(document.getElementById('txnAmount').value);
+            const amount = Number(document.getElementById('txnAmount').value);
             const date = document.getElementById('txnDate').value;
             const note = document.getElementById('txnNote').value.trim();
+            const submitBtn = document.getElementById('txnSubmitBtn');
 
-            if (isNaN(amount) || amount <= 0) {
-                showToast("يرجى إدخال مبلغ صحيح", true);
+            if (!Number.isFinite(amount) || amount <= 0) {
+                showToast('يرجى إدخال مبلغ صحيح أكبر من صفر', true);
+                return;
+            }
+            if (!date) {
+                showToast('اختر تاريخ المعاملة', true);
                 return;
             }
 
             const person = records.find(p => p.docId === docId);
-            if (!person) return;
+            if (!person) {
+                showToast('لم يتم العثور على الحساب. حدّث الصفحة وحاول مرة أخرى.', true);
+                return;
+            }
 
-            const updatedHistory = Array.isArray(person.history) ? [...person.history] : [];
-            updatedHistory.unshift({
-                id: 'tx_' + Date.now(),
-                type: currentTxnType,
-                amount: amount,
-                date: date,
-                note: note || (currentTxnType === 'payment' ? 'سداد دفعة' : 'دين إضافي')
-            });
+            const transactionType = currentTxnType;
+            const newEntry = {
+                id: 'tx_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+                type: transactionType,
+                amount,
+                date,
+                note: note || (transactionType === 'payment' ? 'سداد دفعة' : 'دين إضافي')
+            };
+
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-60');
 
             try {
                 const docRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'debtors', docId);
-                await updateDoc(docRef, { history: updatedHistory });
+                await runTransaction(db, async (firestoreTransaction) => {
+                    const freshSnapshot = await firestoreTransaction.get(docRef);
+                    if (!freshSnapshot.exists()) throw new Error('record-not-found');
+
+                    const freshData = freshSnapshot.data();
+                    const freshHistory = Array.isArray(freshData.history) ? freshData.history : [];
+                    const freshBalance = calculateHistoryBalance(freshHistory);
+
+                    if (transactionType === 'payment' && amount > freshBalance + 0.000001) {
+                        throw new Error('payment-exceeds-balance');
+                    }
+
+                    firestoreTransaction.update(docRef, { history: [newEntry, ...freshHistory] });
+                });
+
                 closeModal('transactionModal');
-                showToast(currentTxnType === 'payment' ? 'تم قيد السداد وتحديث الحساب' : 'تمت زيادة المبلغ بنجاح');
+                showToast(transactionType === 'payment' ? 'تم قيد السداد وتحديث الحساب' : 'تمت زيادة المبلغ بنجاح');
             } catch (err) {
-                console.error("Transaction update error:", err);
-                showToast("حدث خطأ أثناء تحديث المعاملة", true);
+                console.error('Transaction update error:', err);
+                if (err.message === 'payment-exceeds-balance') {
+                    showToast('مبلغ السداد أكبر من المبلغ المتبقي في الحساب. راجع الرصيد وحاول مرة أخرى.', true);
+                } else if (err.message === 'record-not-found') {
+                    showToast('السجل لم يعد موجوداً. حدّث القائمة وحاول مرة أخرى.', true);
+                } else {
+                    showToast('حدث خطأ أثناء تحديث المعاملة. لم يتم حفظ التغيير.', true);
+                }
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-60');
             }
         }
 
         // Full settlement
         function confirmSettleAll(docId) {
             const person = records.find(p => p.docId === docId);
-            if (!person || !currentUser) return;
+            if (!person || !currentUser || !db) return;
 
             const remaining = getRemainingBalance(person);
             if (remaining <= 0) {
-                showToast("الحساب خالص ومسدد بالفعل");
+                showToast('الحساب خالص ومسدد بالفعل');
                 return;
             }
 
             showConfirmDialog({
-                title: "تسوية وبراءة ذمة",
+                title: 'تسوية وبراءة ذمة',
                 message: `هل أنت متأكد من تسوية وتصفير باقي حساب ${person.name} بمبلغ ${formatMoney(remaining)} ج.م؟`,
-                actionLabel: "نعم، تسوية بالكامل",
-                actionClass: "bg-emerald-600 hover:bg-emerald-700",
+                actionLabel: 'نعم، تسوية بالكامل',
+                actionClass: 'bg-emerald-600 hover:bg-emerald-700',
                 onConfirm: async () => {
-                    const updatedHistory = Array.isArray(person.history) ? [...person.history] : [];
-                    updatedHistory.unshift({
-                        id: 'tx_' + Date.now(),
-                        type: 'payment',
-                        amount: remaining,
-                        date: new Date().toISOString().split('T')[0],
-                        note: 'تسوية الحساب بالكامل وبراءة الذمة'
-                    });
                     const docRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'debtors', docId);
-                    await updateDoc(docRef, { history: updatedHistory });
+                    const now = new Date();
+                    const settlementDate = [
+                        now.getFullYear(),
+                        String(now.getMonth() + 1).padStart(2, '0'),
+                        String(now.getDate()).padStart(2, '0')
+                    ].join('-');
+                    await runTransaction(db, async (firestoreTransaction) => {
+                        const freshSnapshot = await firestoreTransaction.get(docRef);
+                        if (!freshSnapshot.exists()) throw new Error('record-not-found');
+
+                        const freshHistory = Array.isArray(freshSnapshot.data().history)
+                            ? freshSnapshot.data().history : [];
+                        const freshBalance = calculateHistoryBalance(freshHistory);
+                        if (freshBalance <= 0) return;
+
+                        const settlement = {
+                            id: 'tx_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+                            type: 'payment',
+                            amount: freshBalance,
+                            date: settlementDate,
+                            note: 'تسوية الحساب بالكامل وبراءة الذمة'
+                        };
+                        firestoreTransaction.update(docRef, { history: [settlement, ...freshHistory] });
+                    });
                     showToast(`تم تصفير حساب ${person.name} بنجاح`);
                 }
             });
@@ -1136,10 +1406,22 @@
             
             pendingConfirmCallback = onConfirm;
             btn.onclick = async () => {
-                if (typeof pendingConfirmCallback === 'function') {
-                    await pendingConfirmCallback();
+                if (btn.disabled) return;
+                btn.disabled = true;
+                btn.classList.add('opacity-60');
+                try {
+                    if (typeof pendingConfirmCallback === 'function') {
+                        await pendingConfirmCallback();
+                    }
+                    closeModal('confirmDialog');
+                } catch (error) {
+                    console.error('Confirmation action error:', error);
+                    showToast('تعذر تنفيذ العملية. لم يتم تأكيد التغيير؛ حاول مرة أخرى.', true);
+                } finally {
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-60');
+                    pendingConfirmCallback = null;
                 }
-                closeModal('confirmDialog');
             };
             openModal('confirmDialog');
         }
