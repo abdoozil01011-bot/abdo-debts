@@ -514,6 +514,7 @@
         window.openEditPersonModal = openEditPersonModal;
         window.savePersonEdits = savePersonEdits;
         window.exportBackupCSV = exportBackupCSV;
+        window.exportCustomerExcel = exportCustomerExcel;
         window.openReportsModal = openReportsModal;
         window.closeModal = closeModal;
         window.saveNewPerson = saveNewPerson;
@@ -967,6 +968,9 @@
                                     <i class="fa-solid fa-receipt text-[11px]"></i> كشف الحساب (${person.history ? person.history.length : 0})
                                 </button>
                                 <div class="flex items-center gap-1.5">
+                                    <button onclick="exportCustomerExcel('${person.docId}')" title="تصدير كشف حساب العميل Excel" class="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded-lg">
+                                        <i class="fa-solid fa-file-excel"></i>
+                                    </button>
                                     <button onclick="openEditPersonModal('${person.docId}')" title="تعديل بيانات الشخص" class="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded-lg">
                                         <i class="fa-solid fa-pen-to-square"></i>
                                     </button>
@@ -1140,7 +1144,13 @@
             const debtorData = [['م', 'اسم الشخص', 'رقم الهاتف', 'ملاحظات', 'تاريخ التسجيل', 'إجمالي الدين', 'المسدد', 'المتبقي', 'الحالة'], ...debtRows.map(x => [x.no, x.name, x.phone, x.notes, x.createdAt, x.totalDebt, x.paid, x.remaining, x.status])];
             const wsDebtors = XLSX.utils.aoa_to_sheet(debtorData);
             wsDebtors['!cols'] = [{wch:7},{wch:25},{wch:18},{wch:32},{wch:16},{wch:18},{wch:18},{wch:18},{wch:20}];
-            styleSheet(wsDebtors, 0, debtorData.length - 1, 8, [5,6,7]);
+            // Dedicated grand-total row at the bottom of the customer register.
+            const debtorTotalRow = debtorData.length;
+            XLSX.utils.sheet_add_aoa(wsDebtors, [[ '', 'الإجمالي العام', '', '', '', { t: 'n', f: `SUM(F2:F${debtorTotalRow})` }, { t: 'n', f: `SUM(G2:G${debtorTotalRow})` }, { t: 'n', f: `SUM(H2:H${debtorTotalRow})` }, '' ]], { origin: -1 });
+            wsDebtors['!rows'][debtorTotalRow] = { hpt: 28 };
+            for (let c = 0; c < 9; c++) { const cell = wsDebtors[XLSX.utils.encode_cell({ r: debtorTotalRow, c })]; if (cell) cell.s = totalStyle; }
+            styleSheet(wsDebtors, 0, debtorTotalRow - 1, 8, [5,6,7]);
+            for (let c = 0; c < 9; c++) { const cell = wsDebtors[XLSX.utils.encode_cell({ r: debtorTotalRow, c })]; if (cell) cell.s = totalStyle; }
             XLSX.utils.book_append_sheet(wb, wsDebtors, 'المديونون');
 
             // Sheet 3: Full transaction log
@@ -1150,9 +1160,81 @@
             styleSheet(wsTransactions, 0, txnData.length - 1, 6, [4,6]);
             XLSX.utils.book_append_sheet(wb, wsTransactions, 'سجل الحركات');
 
-            const fileName = 'دفتر-المستحقات-' + dateKey + '.xlsx';
+            // Add a separate detailed statement sheet for every customer.
+            const usedSheetNames = new Set(['ملخص مالي', 'المديونون', 'سجل الحركات']);
+            records.forEach(person => {
+                const sheetName = makeCustomerSheetName(person.name, usedSheetNames);
+                appendCustomerStatementSheet(wb, person, sheetName, XLSX, { titleStyle, subtitleStyle, headerStyle, bodyStyle, moneyStyle, totalStyle, dateText });
+            });
+
+            const fileName = 'دفتر-المستحقات-كامل-' + dateKey + '.xlsx';
             XLSX.writeFile(wb, fileName, { bookType: 'xlsx', compression: true });
-            showToast('تم تجهيز ملف Excel الاحترافي بنجاح.');
+            showToast('تم تصدير الملف الشامل: إجمالي عام وكشف مستقل لكل عميل.');
+        }
+
+        function makeCustomerSheetName(value, used) {
+            let base = String(value || 'عميل').replace(/[\\/?*\[\]:]/g, ' ').trim().slice(0, 25) || 'عميل';
+            let name = base, n = 2;
+            while (used.has(name)) { const suffix = '-' + n++; name = base.slice(0, 31 - suffix.length) + suffix; }
+            used.add(name); return name;
+        }
+
+        function appendCustomerStatementSheet(wb, person, sheetName, XLSX, styles) {
+            const totalDebt = getTotalDebt(person);
+            const remaining = getRemainingBalance(person);
+            const paid = Math.max(0, totalDebt - remaining);
+            const movements = (Array.isArray(person.history) ? person.history : []).map((item, index) => ({...item, _index:index}))
+                .sort((a,b) => String(a.date || '').localeCompare(String(b.date || '')) || a._index-b._index);
+            let running = 0;
+            const movementRows = movements.map(item => {
+                const amount = Number(item.amount) || 0;
+                const isPayment = item.type === 'payment';
+                running += isPayment ? -amount : amount;
+                return [String(item.date || ''), isPayment ? 'سداد' : (item.type === 'initial' ? 'رصيد افتتاحي' : 'دين إضافي'), isPayment ? -amount : amount, String(item.note || ''), Math.max(0, running)];
+            });
+            const rows = [
+                ['اسم العميل', String(person.name || '')],
+                ['رقم الهاتف', String(person.phone || '—')],
+                ['تاريخ التسجيل', String(person.createdAt || '—')],
+                ['ملاحظات العميل', String(person.notes || '—')],
+                ['إجمالي الدين', totalDebt], ['إجمالي المسدد', paid], ['المتبقي عليه', remaining],
+                ['الحالة', remaining > 0 ? 'عليه مستحقات' : 'مسدد بالكامل'],
+                [], ['التاريخ', 'نوع الحركة', 'قيمة الحركة (+ دين / - سداد)', 'تفاصيل الحركة', 'الرصيد بعد الحركة'],
+                ...movementRows
+            ];
+            const data = [['كشف حساب العميل'], ['تاريخ التصدير: ' + styles.dateText], [], ...rows];
+            const ws = XLSX.utils.aoa_to_sheet(data);
+            ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:4}},{s:{r:1,c:0},e:{r:1,c:4}}];
+            ws['!cols'] = [{wch:20},{wch:25},{wch:25},{wch:40},{wch:22}];
+            ws['!views'] = [{rightToLeft:true, state:'frozen', ySplit:13}];
+            if (ws.A1) ws.A1.s = styles.titleStyle;
+            if (ws.A2) ws.A2.s = styles.subtitleStyle;
+            for (let r=3;r<=10;r++) for (let c=0;c<5;c++) { const cell=ws[XLSX.utils.encode_cell({r,c})]; if(cell) cell.s=(r>=7&&r<=9&&c===1)?styles.totalStyle:styles.bodyStyle; }
+            const headerRow=12;
+            for(let c=0;c<5;c++){const cell=ws[XLSX.utils.encode_cell({r:headerRow,c})];if(cell)cell.s=styles.headerStyle;}
+            for(let r=headerRow+1;r<headerRow+1+movementRows.length;r++) for(let c=0;c<5;c++){const cell=ws[XLSX.utils.encode_cell({r,c})];if(cell)cell.s=(c===2||c===4)?styles.moneyStyle:styles.bodyStyle;}
+            ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:headerRow,c:0},e:{r:headerRow+Math.max(0,movementRows.length),c:4}})};
+            XLSX.utils.book_append_sheet(wb,ws,sheetName);
+        }
+
+        function exportCustomerExcel(docId) {
+            if (!currentUser) return showToast('سجل الدخول أولاً لتصدير كشف الحساب', true);
+            const person = records.find(p => p.docId === docId);
+            if (!person) return showToast('لم يتم العثور على العميل', true);
+            if (!window.XLSX) return showToast('تعذر تحميل مكتبة Excel. افحص الإنترنت ثم أعد المحاولة.', true);
+            try {
+                const XLSX = window.XLSX, now = new Date();
+                const dateText = now.toLocaleDateString('ar-EG');
+                const dateKey = [now.getFullYear(),String(now.getMonth()+1).padStart(2,'0'),String(now.getDate()).padStart(2,'0')].join('-');
+                const navy='17324D',teal='087E75',white='FFFFFF',border={top:{style:'thin',color:'D8E1E8'},bottom:{style:'thin',color:'D8E1E8'},left:{style:'thin',color:'D8E1E8'},right:{style:'thin',color:'D8E1E8'}};
+                const bodyStyle={font:{name:'Arial',sz:10,color:{rgb:'243746'}},alignment:{horizontal:'right',vertical:'center',wrapText:true},border};
+                const styles={dateText,titleStyle:{font:{name:'Arial',sz:18,bold:true,color:{rgb:white}},fill:{fgColor:{rgb:navy}},alignment:{horizontal:'center',vertical:'center'}},subtitleStyle:{font:{name:'Arial',sz:10,color:{rgb:'526575'}},alignment:{horizontal:'center',vertical:'center'}},headerStyle:{font:{name:'Arial',bold:true,color:{rgb:white}},fill:{fgColor:{rgb:teal}},alignment:{horizontal:'center',vertical:'center',wrapText:true},border},bodyStyle,moneyStyle:{...bodyStyle,numFmt:'#,##0.00 "ج.م"',alignment:{horizontal:'center',vertical:'center'}},totalStyle:{font:{name:'Arial',bold:true,color:{rgb:navy}},fill:{fgColor:{rgb:'EAF3F5'}},alignment:{horizontal:'center',vertical:'center'},border,numFmt:'#,##0.00 "ج.م"'}};
+                const wb=XLSX.utils.book_new();
+                appendCustomerStatementSheet(wb,person,'كشف الحساب',XLSX,styles);
+                const safeName=String(person.name||'عميل').replace(/[\\/:*?"<>|]/g,'-').slice(0,40);
+                XLSX.writeFile(wb,'كشف-حساب-'+safeName+'-'+dateKey+'.xlsx',{bookType:'xlsx',compression:true});
+                showToast('تم تصدير كشف حساب العميل بنجاح');
+            } catch(err) { console.error('Customer Excel export error:',err); showToast('حدث خطأ أثناء إنشاء ملف العميل',true); }
         }
 
         function openReportsModal() {
