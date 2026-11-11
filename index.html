@@ -447,6 +447,33 @@
         <span id="toastMsg">تم الإجراء بنجاح</span>
     </div>
 
+
+    <script>
+      // Safety fallback: never leave the app on the loading screen forever.
+      window.addEventListener('load', function () {
+        window.setTimeout(function () {
+          var loader = document.getElementById('appLoader');
+          if (!loader || !document.body.contains(loader)) return;
+
+          loader.remove();
+
+          var authView = document.getElementById('authContainer');
+          var dashboard = document.getElementById('mainDashboard');
+          var alertBox = document.getElementById('authErrorAlert');
+          var alertText = document.getElementById('authErrorMsg');
+
+          if (authView) authView.classList.remove('hidden');
+          if (dashboard) dashboard.classList.add('hidden');
+
+          if (alertBox && alertText) {
+            alertText.textContent =
+              'التطبيق اتأخر في الاتصال بـ Firebase. تأكد من الإنترنت وافتح الصفحة من جديد. لو استمرت المشكلة ابعتلي صورة من Console.';
+            alertBox.classList.remove('hidden');
+          }
+        }, 12000);
+      });
+    </script>
+
     <!-- ==================== FIREBASE SCRIPT ==================== -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -557,6 +584,11 @@
                         showAuthNotice('لازم تأكد بريدك الإلكتروني من الرسالة اللي وصلتك قبل استخدام دفتر المستحقات.');
                     }
                 }
+            }, (error) => {
+                console.error('Firebase auth-state error:', error);
+                hideAppLoader();
+                showAuthView();
+                showAuthNotice('تعذر الاتصال بخدمة تسجيل الدخول. راجع اتصال الإنترنت وإعدادات Firebase ثم حاول مرة أخرى.');
             });
         });
 
