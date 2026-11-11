@@ -31,6 +31,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- Excel export (XLSX with cell styling) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
@@ -205,7 +207,7 @@
                     <i class="fa-solid fa-chart-column"></i> التقارير المالية
                 </button>
                 <button onclick="exportBackupCSV()" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 text-xs font-bold border border-emerald-100 dark:border-emerald-900">
-                    <i class="fa-solid fa-file-csv"></i> نسخة احتياطية Excel / CSV
+                    <i class="fa-solid fa-file-excel"></i> تصدير Excel احترافي
                 </button>
             </section>
 
@@ -538,20 +540,8 @@
                 return;
             }
 
-            // Fail-safe: do not leave the user on the loading screen indefinitely.
-            let authStateResolved = false;
-            const authStateTimeout = setTimeout(() => {
-                if (!authStateResolved) {
-                    hideAppLoader();
-                    showAuthView();
-                    showAuthNotice('الاتصال بخدمة تسجيل الدخول تأخر. افحص الإنترنت وحدّث الصفحة، ولو استمرت المشكلة افتح Console لمعرفة الخطأ.');
-                }
-            }, 12000);
-
             // Listen to Auth State. Unverified accounts never reach the dashboard.
             onAuthStateChanged(auth, (user) => {
-                authStateResolved = true;
-                clearTimeout(authStateTimeout);
                 hideAppLoader();
                 if (user && user.emailVerified) {
                     currentUser = user;
@@ -569,13 +559,6 @@
                         showAuthNotice('لازم تأكد بريدك الإلكتروني من الرسالة اللي وصلتك قبل استخدام دفتر المستحقات.');
                     }
                 }
-            }, (error) => {
-                authStateResolved = true;
-                clearTimeout(authStateTimeout);
-                console.error('Auth state listener error:', error);
-                hideAppLoader();
-                showAuthView();
-                showAuthNotice('تعذر التحقق من حالة الحساب. افحص اتصال الإنترنت وإعدادات Firebase ثم أعد تحميل الصفحة.');
             });
         });
 
@@ -1040,11 +1023,8 @@
             }
         }
 
-        function csvCell(value) {
-            let text = String(value ?? '');
-            if (/^[=+@\\-\\t\\r]/.test(text)) text = "'" + text;
-            const safe = text.replace(/"/g, '""');
-            return '"' + safe + '"';
+        function excelSafeText(value) {
+            return String(value ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
         }
 
         function exportBackupCSV() {
@@ -1056,36 +1036,123 @@
                 showToast('لا توجد بيانات لتصديرها', true);
                 return;
             }
-            const rows = [[
-                'اسم الشخص', 'رقم الهاتف', 'ملاحظات الشخص', 'تاريخ إنشاء الحساب',
-                'نوع الحركة', 'المبلغ بالجنيه', 'تاريخ الحركة', 'ملاحظات الحركة',
-                'الرصيد المتبقي بالجنيه'
-            ]];
-            records.forEach(person => {
-                const history = Array.isArray(person.history) ? person.history : [];
-                if (!history.length) {
-                    rows.push([person.name, person.phone, person.notes, person.createdAt, '', '', '', '', getRemainingBalance(person)]);
-                } else {
-                    history.forEach(item => rows.push([
-                        person.name, person.phone, person.notes, person.createdAt,
-                        item.type === 'payment' ? 'سداد' : (item.type === 'initial' ? 'رصيد افتتاحي' : 'دين إضافي'),
-                        item.amount, item.date, item.note, getRemainingBalance(person)
-                    ]));
-                }
-            });
-            const csv = '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n');
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
+            if (!window.XLSX) {
+                showToast('تعذر تحميل مكتبة Excel. افحص الإنترنت ثم أعد المحاولة.', true);
+                return;
+            }
+
             const now = new Date();
-            const localDate = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
-            link.download = 'دفتر-المستحقات-نسخة-احتياطية-' + localDate + '.csv';
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            setTimeout(() => URL.revokeObjectURL(url), 1500);
-            showToast('تم تجهيز النسخة الاحتياطية. احتفظ بها في مكان آمن.');
+            const dateText = now.toLocaleDateString('ar-EG');
+            const dateKey = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+            const money = value => Number(value || 0);
+            const totalRemaining = records.reduce((sum, person) => sum + getRemainingBalance(person), 0);
+            const totalDebt = records.reduce((sum, person) => sum + getTotalDebt(person), 0);
+            const totalPaid = records.reduce((sum, person) => sum + Math.max(0, getTotalDebt(person) - getRemainingBalance(person)), 0);
+            const activeCount = records.filter(person => getRemainingBalance(person) > 0).length;
+
+            const debtRows = records.map((person, index) => ({
+                no: index + 1,
+                name: excelSafeText(person.name),
+                phone: excelSafeText(person.phone),
+                notes: excelSafeText(person.notes),
+                createdAt: excelSafeText(person.createdAt),
+                totalDebt: getTotalDebt(person),
+                remaining: getRemainingBalance(person),
+                paid: Math.max(0, getTotalDebt(person) - getRemainingBalance(person)),
+                status: getRemainingBalance(person) > 0 ? 'عليه مستحقات' : 'مسدد بالكامل'
+            }));
+
+            const transactionRows = [];
+            records.forEach(person => {
+                (Array.isArray(person.history) ? person.history : []).forEach(item => {
+                    const typeLabel = item.type === 'payment' ? 'سداد' : (item.type === 'initial' ? 'رصيد افتتاحي' : 'دين إضافي');
+                    transactionRows.push({
+                        date: excelSafeText(item.date),
+                        name: excelSafeText(person.name),
+                        phone: excelSafeText(person.phone),
+                        type: typeLabel,
+                        amount: money(item.amount),
+                        note: excelSafeText(item.note),
+                        balance: getRemainingBalance(person)
+                    });
+                });
+            });
+            transactionRows.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
+            const wb = XLSX.utils.book_new();
+            wb.Props = { Title: 'دفتر المستحقات', Subject: 'نسخة احتياطية وتقارير مالية', Author: 'دفتر المستحقات', CreatedDate: now };
+            const navy = '17324D', teal = '087E75', pale = 'EAF3F5', white = 'FFFFFF', green = 'E2F4EA', red = 'FCE8E6', gray = 'F3F6F8';
+            const border = { top: { style: 'thin', color: 'D8E1E8' }, bottom: { style: 'thin', color: 'D8E1E8' }, left: { style: 'thin', color: 'D8E1E8' }, right: { style: 'thin', color: 'D8E1E8' } };
+            const titleStyle = { font: { name: 'Arial', sz: 18, bold: true, color: { rgb: white } }, fill: { fgColor: { rgb: navy } }, alignment: { horizontal: 'center', vertical: 'center' } };
+            const subtitleStyle = { font: { name: 'Arial', sz: 10, color: { rgb: '526575' } }, alignment: { horizontal: 'center', vertical: 'center' } };
+            const headerStyle = { font: { name: 'Arial', bold: true, color: { rgb: white } }, fill: { fgColor: { rgb: teal } }, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border };
+            const bodyStyle = { font: { name: 'Arial', sz: 10, color: { rgb: '243746' } }, alignment: { horizontal: 'right', vertical: 'center', wrapText: true }, border };
+            const moneyStyle = { ...bodyStyle, numFmt: '#,##0.00 "ج.م"', alignment: { horizontal: 'center', vertical: 'center' } };
+            const totalStyle = { font: { name: 'Arial', bold: true, color: { rgb: navy } }, fill: { fgColor: { rgb: pale } }, alignment: { horizontal: 'center', vertical: 'center' }, border, numFmt: '#,##0.00 "ج.م"' };
+
+            function styleSheet(ws, headerRow, lastRow, lastCol, moneyCols = []) {
+                ws['!views'] = [{ rightToLeft: true, state: 'frozen', ySplit: headerRow + 1 }];
+                ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: headerRow, c: 0 }, e: { r: lastRow, c: lastCol } }) };
+                const range = XLSX.utils.decode_range(ws['!ref']);
+                for (let R = 0; R <= range.e.r; R++) {
+                    for (let C = 0; C <= range.e.c; C++) {
+                        const cell = ws[XLSX.utils.encode_cell({ r: R, c: C })];
+                        if (!cell) continue;
+                        if (R === headerRow) cell.s = headerStyle;
+                        else if (R > headerRow) cell.s = moneyCols.includes(C) ? moneyStyle : bodyStyle;
+                    }
+                }
+                ws['!rows'] = ws['!rows'] || [];
+                ws['!rows'][0] = { hpt: 30 };
+                ws['!rows'][headerRow] = { hpt: 26 };
+            }
+
+            // Sheet 1: Executive summary
+            const summary = [
+                ['دفتر المستحقات — التقرير المالي'],
+                ['تاريخ إعداد النسخة: ' + dateText],
+                [],
+                ['المؤشر', 'القيمة'],
+                ['إجمالي الديون المسجلة', totalDebt],
+                ['إجمالي المبالغ المسددة', totalPaid],
+                ['إجمالي المتبقي', totalRemaining],
+                ['عدد الحسابات', records.length],
+                ['عدد الحسابات التي عليها مستحقات', activeCount],
+                ['عدد الحسابات المسددة بالكامل', records.length - activeCount]
+            ];
+            const wsSummary = XLSX.utils.aoa_to_sheet(summary);
+            wsSummary['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 1 } }];
+            wsSummary['!cols'] = [{ wch: 38 }, { wch: 24 }];
+            wsSummary['!views'] = [{ rightToLeft: true }];
+            ['A1'].forEach(a => { if (wsSummary[a]) wsSummary[a].s = titleStyle; });
+            ['A2'].forEach(a => { if (wsSummary[a]) wsSummary[a].s = subtitleStyle; });
+            ['A4','B4'].forEach(a => { if (wsSummary[a]) wsSummary[a].s = headerStyle; });
+            for (let r = 4; r <= 9; r++) {
+                for (let c = 0; c <= 1; c++) {
+                    const cell = wsSummary[XLSX.utils.encode_cell({r,c})];
+                    if (cell) cell.s = (r >= 4 && r <= 6 && c === 1) ? totalStyle : bodyStyle;
+                }
+            }
+            wsSummary['!rows'] = [{ hpt: 36 }, { hpt: 22 }, { hpt: 8 }, { hpt: 26 }];
+            XLSX.utils.book_append_sheet(wb, wsSummary, 'ملخص مالي');
+
+            // Sheet 2: Debtors register
+            const debtorData = [['م', 'اسم الشخص', 'رقم الهاتف', 'ملاحظات', 'تاريخ التسجيل', 'إجمالي الدين', 'المسدد', 'المتبقي', 'الحالة'], ...debtRows.map(x => [x.no, x.name, x.phone, x.notes, x.createdAt, x.totalDebt, x.paid, x.remaining, x.status])];
+            const wsDebtors = XLSX.utils.aoa_to_sheet(debtorData);
+            wsDebtors['!cols'] = [{wch:7},{wch:25},{wch:18},{wch:32},{wch:16},{wch:18},{wch:18},{wch:18},{wch:20}];
+            styleSheet(wsDebtors, 0, debtorData.length - 1, 8, [5,6,7]);
+            XLSX.utils.book_append_sheet(wb, wsDebtors, 'المديونون');
+
+            // Sheet 3: Full transaction log
+            const txnData = [['التاريخ', 'اسم الشخص', 'رقم الهاتف', 'نوع الحركة', 'المبلغ', 'ملاحظات الحركة', 'الرصيد المتبقي الحالي'], ...transactionRows.map(x => [x.date, x.name, x.phone, x.type, x.amount, x.note, x.balance])];
+            const wsTransactions = XLSX.utils.aoa_to_sheet(txnData);
+            wsTransactions['!cols'] = [{wch:16},{wch:25},{wch:18},{wch:18},{wch:18},{wch:34},{wch:23}];
+            styleSheet(wsTransactions, 0, txnData.length - 1, 6, [4,6]);
+            XLSX.utils.book_append_sheet(wb, wsTransactions, 'سجل الحركات');
+
+            const fileName = 'دفتر-المستحقات-' + dateKey + '.xlsx';
+            XLSX.writeFile(wb, fileName, { bookType: 'xlsx', compression: true });
+            showToast('تم تجهيز ملف Excel الاحترافي بنجاح.');
         }
 
         function openReportsModal() {
