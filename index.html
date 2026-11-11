@@ -374,6 +374,8 @@
             getAuth, 
             signInWithEmailAndPassword, 
             createUserWithEmailAndPassword, 
+            sendEmailVerification,
+            reload,
             signOut, 
             onAuthStateChanged 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -388,20 +390,18 @@
             onSnapshot 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Global Firebase Configuration
-        // Uses the environment configuration or sample config if standalone
-        const firebaseConfig = typeof __firebase_config !== 'undefined' 
-            ? JSON.parse(__firebase_config) 
-            : {
-                apiKey: "AIzaSyDummyKeyReplaceWithYourOwnIfSelfHosting",
-                authDomain: "my-debt-tracker-app.firebaseapp.com",
-                projectId: "my-debt-tracker-app",
-                storageBucket: "my-debt-tracker-app.appspot.com",
-                messagingSenderId: "1234567890",
-                appId: "1:1234567890:web:abcdef123456"
-            };
+        // Firebase configuration for the Abdo Debts web app
+        const firebaseConfig = {
+            apiKey: "AIzaSyCssgYdPWUS_wgei4Ejx5og20ZqNQOtNOg",
+            authDomain: "abdo-depts.firebaseapp.com",
+            projectId: "abdo-depts",
+            storageBucket: "abdo-depts.firebasestorage.app",
+            messagingSenderId: "901420084887",
+            appId: "1:901420084887:web:57ad2e2df0bcab9f4b03d2"
+        };
 
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'debt-tracker-app';
+        // This ID is part of the Firestore path used by the security rules.
+        const appId = 'abdo-depts';
 
         let app, auth, db;
         try {
@@ -443,10 +443,10 @@
             document.getElementById('newPersonDate').valueAsDate = new Date();
             document.getElementById('txnDate').valueAsDate = new Date();
 
-            // Listen to Auth State
+            // Listen to Auth State. Unverified accounts never reach the dashboard.
             onAuthStateChanged(auth, (user) => {
                 hideAppLoader();
-                if (user) {
+                if (user && user.emailVerified) {
                     currentUser = user;
                     showDashboardView(user);
                     subscribeToUserData(user.uid);
@@ -458,6 +458,9 @@
                     }
                     records = [];
                     showAuthView();
+                    if (user && !user.emailVerified) {
+                        showAuthNotice('لازم تأكد بريدك الإلكتروني من الرسالة اللي وصلتك قبل استخدام دفتر المستحقات.');
+                    }
                 }
             });
         });
@@ -532,7 +535,17 @@
             }
         }
 
-        // Auth Logic
+        // Show an authentication notice inside the login/register card.
+        function showAuthNotice(message) {
+            const alert = document.getElementById('authErrorAlert');
+            const text = document.getElementById('authErrorMsg');
+            if (alert && text) {
+                text.textContent = message;
+                alert.classList.remove('hidden');
+            }
+        }
+
+        // Auth Logic: new accounts must verify their email before using the app.
         async function handleAuthSubmit(e) {
             e.preventDefault();
             const email = document.getElementById('authEmail').value.trim();
@@ -546,17 +559,31 @@
             submitBtn.classList.add('opacity-75');
 
             try {
+                if (!auth || !db) throw new Error('firebase-not-initialized');
+
                 if (authMode === 'login') {
-                    await signInWithEmailAndPassword(auth, email, password);
+                    const credential = await signInWithEmailAndPassword(auth, email, password);
+                    await reload(credential.user);
+
+                    if (!credential.user.emailVerified) {
+                        // Re-send the verification email when an unverified user tries to log in.
+                        await sendEmailVerification(credential.user);
+                        await signOut(auth);
+                        showAuthNotice('حسابك لسه غير مؤكّد. بعتنالك رسالة تأكيد جديدة؛ افتحها واضغط رابط التأكيد، وبعدها ارجع سجل دخولك.');
+                        return;
+                    }
+
                     showToast("أهلاً بك، تم تسجيل الدخول بنجاح");
                 } else {
-                    await createUserWithEmailAndPassword(auth, email, password);
-                    showToast("تم إنشاء حسابك الجديد بنجاح!");
+                    const credential = await createUserWithEmailAndPassword(auth, email, password);
+                    await sendEmailVerification(credential.user);
+                    await signOut(auth);
+                    showAuthNotice('تم إنشاء الحساب وإرسال رسالة تأكيد إلى بريدك الإلكتروني. افتح الرسالة واضغط رابط التأكيد، ثم ارجع وسجّل دخولك.');
                 }
             } catch (error) {
                 console.error("Auth error:", error);
                 errAlert.classList.remove('hidden');
-                errMsg.textContent = translateFirebaseError(error.code);
+                errMsg.textContent = translateFirebaseError(error.code || error.message);
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.classList.remove('opacity-75');
@@ -586,6 +613,12 @@
                     return 'كلمة المرور ضعيفة، يجب أن تكون 6 خانات على الأقل.';
                 case 'auth/network-request-failed':
                     return 'تعذر الاتصال، يرجى فحص شبكة الإنترنت.';
+                case 'auth/unauthorized-domain':
+                    return 'نطاق الموقع غير مضاف في Firebase. أضف abdooz1011-bot.github.io إلى Authorized domains.';
+                case 'auth/too-many-requests':
+                    return 'تم طلب رسائل كثيرة خلال وقت قصير. انتظر قليلًا ثم حاول مرة أخرى.';
+                case 'firebase-not-initialized':
+                    return 'تعذر تشغيل Firebase. راجع إعدادات الاتصال في ملف الموقع.';
                 default:
                     return 'حدث خطأ غير متوقع، يرجى المحاولة مرة أخرى.';
             }
