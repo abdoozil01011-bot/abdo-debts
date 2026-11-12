@@ -1045,6 +1045,7 @@
                 return;
             }
 
+            try {
             const now = new Date();
             const dateText = now.toLocaleDateString('ar-EG');
             const dateKey = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
@@ -1147,6 +1148,8 @@
             // Dedicated grand-total row at the bottom of the customer register.
             const debtorTotalRow = debtorData.length;
             XLSX.utils.sheet_add_aoa(wsDebtors, [[ '', 'الإجمالي العام', '', '', '', { t: 'n', f: `SUM(F2:F${debtorTotalRow})` }, { t: 'n', f: `SUM(G2:G${debtorTotalRow})` }, { t: 'n', f: `SUM(H2:H${debtorTotalRow})` }, '' ]], { origin: -1 });
+            // Initialize row metadata before setting the total-row height.
+            wsDebtors['!rows'] = wsDebtors['!rows'] || [];
             wsDebtors['!rows'][debtorTotalRow] = { hpt: 28 };
             for (let c = 0; c < 9; c++) { const cell = wsDebtors[XLSX.utils.encode_cell({ r: debtorTotalRow, c })]; if (cell) cell.s = totalStyle; }
             styleSheet(wsDebtors, 0, debtorTotalRow - 1, 8, [5,6,7]);
@@ -1170,6 +1173,10 @@
             const fileName = 'دفتر-المستحقات-كامل-' + dateKey + '.xlsx';
             XLSX.writeFile(wb, fileName, { bookType: 'xlsx', compression: true });
             showToast('تم تصدير الملف الشامل: إجمالي عام وكشف مستقل لكل عميل.');
+            } catch (err) {
+                console.error('Full Excel export error:', err);
+                showToast('تعذر إنشاء ملف Excel الشامل. افتح وحدة التحكم لمعرفة السبب.', true);
+            }
         }
 
         function makeCustomerSheetName(value, used) {
